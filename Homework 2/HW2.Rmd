@@ -8,10 +8,10 @@ date: "2025-02-17"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
 ## Homework 2 Part 3:
 
-```{r, echo = False}
-library(lubridate)
+```{r}
 library(ggplot2)
 library(dplyr)
 library(ggthemes)
@@ -35,7 +35,6 @@ print(colnames(AirPol_df))
 str(lung_df)
 str(AirPol_df)
 ```
-
 
 ```{r}
 Q1 <- quantile(lung_df$Annual_Lung_Cancer_Deaths, 0.25)
@@ -70,8 +69,8 @@ ggplot(lung_df, aes(x = Mortality_Rate)) +
 
 Create a Scatter Plot by generating 100 random values from both the normal and logistic distributions. The points should be brown and use theme_solarized with argument light set to false
 
-```{r, echo=FALSE}
-# install.packages('ggthemes')
+```{r}
+#install.packages('ggthemes')
 df <- data.frame(x = rnorm(100, mean = 0, sd = 1), y = rlogis(100))
 
 ggplot(data = df, aes(x = x, y = y)) +
@@ -81,8 +80,6 @@ ggplot(data = df, aes(x = x, y = y)) +
 ```
 
 ## Part 4
-
-
 
 ```{r}
 lung_agg <- lung_df %>%
@@ -110,7 +107,7 @@ ggplot(merged_data, aes(x = Avg_PM2.5_AQI, y = Total_Lung_Cancer_Deaths, color =
   scale_size(range = c(1, 5))
 ```
 
-```{r, echo = FALSE}
+```{r}
 filtered_lung_df <- lung_df %>%
   filter(Cancer_Stage %in% c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
          Years_of_Smoking > 0)  # Removing non-smokers
@@ -133,6 +130,7 @@ ggplot(filtered_lung_df, aes(x = Years_of_Smoking, y = Cancer_Stage, color = Gen
     panel.grid.major = element_line(linetype = "dashed"),
     panel.grid.minor = element_blank())
 ```
+
 ```{r}
 selected_countries <- c("Brazil", "Germany", "India", "Italy", "Russian Federation", "United States of America")
 
