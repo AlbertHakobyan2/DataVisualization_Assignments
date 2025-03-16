@@ -1,0 +1,743 @@
+---
+title: "DataVizHW3"
+author: "Albert_Hakobyan2"
+date: "2025-03-13"
+output: html_document
+---
+
+### ***Packages***
+```{r, echo=TRUE, message=FALSE, warning=FALSE, results="hide"}
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+```
+
+## Importing the Dataset
+```{r}
+mobiles <- read.csv("mobiles_dataset.csv")
+
+str(mobiles)
+```
+
+# Part 1
+
+## Q1. Does battery capacity influence the launched price of a smartphone? Check this variability across all currencies. Is there any type of difference between behaviors?
+
+```{r}
+mobiles <- read.csv("mobiles_dataset.csv")
+mobiles$Pakistan_USD <- mobiles$Launched.Price.Pakistan.PKR * 0.0036
+mobiles$India_USD <- mobiles$Launched.Price.India.INR * 0.011
+mobiles$China_USD <- mobiles$Launched.Price.China.CNY * 0.14
+mobiles$Dubai_USD <- mobiles$Launched.Price.Dubai.AED * 0.27
+mobiles$USA_USD <- mobiles$Launched.Price.USA.USD
+```
+
+```{r}
+price_columns <- c("Pakistan_USD", "India_USD", "China_USD", "USA_USD", "Dubai_USD")
+correlation <- cor(mobiles$Battery.Capacity.mAh, mobiles[, price_columns])
+print(correlation)
+```
+
+>As we see, the correlations tell that the battery sizes barely affect the pricing of the phones.
+
+
+```{r}
+ggplot(mobiles, aes(x = Battery.Capacity.mAh, y = USA_USD)) + 
+  geom_point() +
+  labs(title = "Battery Capacity vs Price (USD)", x = "Battery Capacity (mAh)", y = "Price (USD)")
+```
+
+>The price range for phones with a battery capacity of 1000-6000 mAh is comparable to or sometimes even higher than the price range of phones with a 7000+ mAh battery capacity, therefore I doubt any influence of battery size on the price, but let's analyze other visualizations as well
+
+
+```{r}
+mobiles$Price_Category <- cut(mobiles$USA_USD, breaks = c(0, 250, 450, 650, 800, 1100, 1500, 2000, 3000),
+                            labels = c("<$250", "$250-450", "$450-650", "$650-800", "$800-1100", "$1100-1500", "$1500-2000", "$2000+"))
+
+ggplot(mobiles, aes(x = Battery.Capacity.mAh)) +
+  geom_histogram(bins = 20, fill = "turquoise", color = "black") +
+  labs(title = "Distribution of Battery Capacity", x = "Battery Capacity", y = "Count") +
+  theme_bw()
+```
+
+```{r fig.width=15, fig.height=7}
+# Faceted histograms of battery capacities by price category
+ggplot(mobiles, aes(x = Battery.Capacity.mAh, fill = Price_Category)) +
+              geom_histogram(bins = 20, color = "black") +
+              facet_wrap(~ Price_Category, scales = "free_y") +
+              labs(title = "Battery Capacity Distribution by Price Category", x = "Battery Capacity (mAh)", y = "Count") +
+              scale_fill_brewer(palette = "Set2") +
+              theme_minimal() +
+              theme(legend.position = "none")
+```
+
+```{r}
+Summary <- tapply(mobiles$Battery.Capacity.mAh, mobiles$Price_Category, mean)
+print(Summary)
+Overall_AVG <- mean(Summary)
+cat("\nThe average of all the price category averages is : ", Overall_AVG)
+```
+
+> For each price range, both the facet of histograms (comparison of the distributions) and the information about the means of each price category show that the average battery size does not change that much with the increase of price. The value of a couple of hundred mAh-s is not signifficant in my personal observations, experience and knowledge gained from professional phone reviewers. Basically, no phone manufacturer in the competitive market wants to sacrifice the batary capacity for other materials, because it is a huge part of the user experience. Additionally, since there are outlandish battery sizes (~9000mah) both in 650-800USD category and in the flagship category $1100-2000, I see no signifficant increase in value even from these big battery size outliers.
+
+
+---
+
+## Q2. Does RAM size impact the price of smartphones? Check this variability across all currencies. Is there any type of difference between behaviors?
+
+```{r}
+mobiles$RAM_GB <- as.numeric(regmatches(mobiles$RAM, regexpr("^\\d+", mobiles$RAM)))
+ # removing the Gigabyte letters and converting the type from string to numeric and creating a separate column
+
+# Checking the correlation between RAM and prices 
+# (correlation shows how one variable affects the other, so this, just like before is important here):
+price_columns <- c("Pakistan_USD", "India_USD", "China_USD", "USA_USD", "Dubai_USD")
+correlation <- round(cor(mobiles$RAM_GB, mobiles[, price_columns]),4)
+print(correlation)
+```
+
+```{r, warning=FALSE}
+ggplot(mobiles, aes(x = RAM_GB, y = scale(USA_USD))) + 
+        geom_point(alpha = 0.5) +
+        labs(title = "RAM Size vs. Scaled Price", x = "RAM (GB)", y = "Scaled Price (Z-score)") +
+        scale_x_continuous(limits = c(0, 18)) +
+        theme_bw()
+```
+
+```{r}
+ram_by_price <- aggregate(RAM_GB ~ Price_Category, data = mobiles, FUN = mean)
+print(ram_by_price)
+```
+
+```{r}
+price_by_ram <- aggregate(cbind(Pakistan_USD, India_USD, China_USD, Dubai_USD, USA_USD) ~ RAM_GB, data = mobiles, FUN = mean)
+price_by_ram <- price_by_ram[price_by_ram$RAM_GB <= 16, ]
+
+ggplot(price_by_ram %>% 
+         pivot_longer(-RAM_GB, names_to = "Region", values_to = "Price") %>%
+         mutate(Region = gsub("_USD", "", Region)),
+       aes(x = factor(RAM_GB), y = Price, fill = Region)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "Average Price of Smartphones by RAM Size", x = "RAM (GB)", y = "Average Price (USD)", fill = "Region") +
+  theme_bw()
+```
+
+
+```{r, warning=FALSE}
+ggplot(mobiles, aes(x = Price_Category, y = RAM_GB)) +
+  geom_boxplot(fill = "turquoise") +
+  labs(title = "RAM Distribution by Price Category", x = "Price Category", y = "RAM (GB)") +
+  scale_y_continuous(limits = c(0, 18)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+> RAM size and price show a clear link which's somewhat strong (~0.44). Looking at the charts, we can see this link is stronger in phones that cost between $0 and $650-$800, where the line goes up steadily. For more expensive phones, the link gets weaker, and RAM stops growing even as prices go up. This happens because more RAM stops making phones much better after a point. From what I know, phone makers start to improve their software instead once RAM is good enough. Adding too much RAM costs more money but doesn't help much (it's like making a teapot too big when only a few people will drink from it). 
+
+
+## Q3. Do Apple devices have a higher price variation across different regions compared to other brands? In which country do Apple devices have the highest markup? Are there brands with more stable pricing across regions?
+
+
+```{r}
+mobiles <- mobiles %>%
+  rowwise() %>%
+  mutate(Price_CV = sd(c(Pakistan_USD, India_USD, China_USD, Dubai_USD, USA_USD)) / mean(c(Pakistan_USD, India_USD, China_USD, Dubai_USD, USA_USD)) * 100,
+         Price_Range_Pct = ((max(c(Pakistan_USD, India_USD, China_USD, Dubai_USD, USA_USD)) - min(c(Pakistan_USD, India_USD, China_USD, Dubai_USD, USA_USD))) / USA_USD) * 100)
+```
+
+
+#### Bar chart with error bars for top 10 brands by model count
+```{r}
+top_brands <- c("Apple", "Samsung", "Google", "Huawei", "Xiaomi", "Oppo", "Vivo", "OnePlus", "Realme", "Honor")
+
+brand_stats <- mobiles %>%
+  dplyr::filter(Company.Name %in% top_brands) %>%
+  dplyr::group_by(Company.Name) %>%
+  dplyr::summarize(
+    Mean_CV = mean(Price_CV),
+    SD_CV = sd(Price_CV),
+    Count = n())
+```
+
+
+```{r}
+ggplot(brand_stats, aes(x = reorder(Company.Name, -Mean_CV), y = Mean_CV, fill = ifelse(Company.Name == "Apple", "Apple", "Other"))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Price Variation by Brand", x = "Brand", y = "Mean Coefficient of Variation (%)") +
+  scale_fill_manual(values = c("Apple" = "pink", "Other" = "turquoise"), name = "Brand Type") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+#### Average prices relative to US by brand:
+```{r fig.width=15, fig.height=7}
+top_brands <- c("Apple", "Samsung", "Google", "Huawei", "Xiaomi", "Oppo", "Vivo", "OnePlus", "Realme", "Honor")
+price_ratios <- mobiles %>%
+  dplyr::group_by(Company.Name) %>%
+  dplyr::filter(!is.na(Company.Name)) %>%
+  dplyr::summarize(
+    Pak_vs_US = mean(Pakistan_USD / USA_USD * 100, na.rm = TRUE),
+    India_vs_US = mean(India_USD  / USA_USD * 100, na.rm = TRUE),
+    China_vs_US = mean(China_USD  / USA_USD * 100, na.rm = TRUE), 
+    Dubai_vs_US = mean(Dubai_USD  / USA_USD * 100, na.rm = TRUE),
+    Model_Count = n()) %>%
+  dplyr::filter(Company.Name %in% top_brands)
+
+price_ratios <- mobiles %>%
+  dplyr::group_by(Company.Name) %>%
+  dplyr::summarize(Pak_vs_US = mean(Pakistan_USD / USA_USD * 100),
+                  India_vs_US = mean(India_USD / USA_USD * 100),
+                  China_vs_US = mean(China_USD / USA_USD * 100),
+                  Dubai_vs_US = mean(Dubai_USD / USA_USD * 100),
+                  Model_Count = n()) %>%
+  dplyr::filter(Company.Name %in% top_brands)
+
+price_ratios_long <- price_ratios %>% # Reshaping price_rations for correct dodge bar charts, since errors are unpleasant at 4:55AM
+    pivot_longer(cols = c(Pak_vs_US, India_vs_US, China_vs_US, Dubai_vs_US),
+                                names_to = "Region", values_to = "Ratio") %>%
+    mutate(Region = factor(Region, levels = c("Pak_vs_US", "India_vs_US", "China_vs_US", "Dubai_vs_US"),
+                                          labels = c("Pakistan", "India", "China", "Dubai")))
+
+# Dodge bar chart will show regional price differences
+ggplot(price_ratios_long, aes(x = Region, y = Ratio - 100, fill = Company.Name)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Regional Price Differences Compared to US Price",
+       subtitle = "Positive values indicate higher prices than US",
+       x = "Region",
+       y = "% Difference from US Price") +
+  scale_fill_brewer(palette = "Paired") +
+  theme_minimal() +
+  facet_wrap(~Company.Name, scales = "free_y") +
+  theme(axis.text.x = element_text(size = 8))
+```
+
+#### Preparing data in long format for histograms
+```{r}
+price_data_long <- mobiles %>%
+  select(Company.Name, Pakistan_USD, India_USD, China_USD, Dubai_USD, USA_USD) %>%
+  pivot_longer(cols = c(Pakistan_USD, India_USD, China_USD, Dubai_USD, USA_USD),
+               names_to = "Region", values_to = "Price") %>%
+  mutate(Region = gsub("_USD", "", Region), Apple = ifelse(Company.Name == "Apple", "Apple", "Other Brands"))
+```
+
+#### Faceted histograms of price distributions by region
+```{r fig.width=15, fig.height=7}
+ggplot(price_data_long, aes(x = Price, fill = Apple)) +
+          geom_histogram(bins = 20,  position = "identity") +
+          facet_grid(Region ~ Apple, scales = "free_y") +
+          labs(title = "Price Distribution by Region: Apple vs. Other Brands",x = "Price (USD)", y = "Count") +
+          scale_fill_manual(values = c("Apple" = "red", "Other Brands" = "turquoise")) +
+          theme_bw()
+```
+
+
+```{r}
+apple_data <- mobiles %>% # price differences from US price
+  filter(Company.Name == "Apple") %>%
+  mutate(Pak_Diff = (Pakistan_USD - USA_USD) / USA_USD * 100,
+        India_Diff = (India_USD - USA_USD) / USA_USD * 100,
+        China_Diff = (China_USD - USA_USD) / USA_USD * 100,
+        Dubai_Diff = (Dubai_USD - USA_USD) / USA_USD * 100)
+
+non_apple_data <- mobiles %>%
+  filter(Company.Name != "Apple") %>%
+  mutate(Pak_Diff = (Pakistan_USD - USA_USD) / USA_USD * 100,
+          India_Diff = (India_USD - USA_USD) / USA_USD * 100,
+          China_Diff = (China_USD - USA_USD) / USA_USD * 100,
+          Dubai_Diff = (Dubai_USD - USA_USD) / USA_USD * 100)
+
+diff_data <- bind_rows(apple_data %>% 
+    select(Company.Name, Pak_Diff, India_Diff, China_Diff, Dubai_Diff) %>%
+    mutate(Type = "Apple"),
+  non_apple_data %>% select(Company.Name, Pak_Diff, India_Diff, China_Diff, Dubai_Diff) %>%
+    mutate(Type = "Other Brands")) %>%
+  pivot_longer(cols = c(Pak_Diff, India_Diff, China_Diff, Dubai_Diff),
+               names_to = "Region", values_to = "Percent_Diff") %>%
+  mutate(Region = gsub("_Diff", "", Region)) 
+```
+
+#### Density plots for Region-Price difference compared to US pricing
+```{r}
+ggplot(diff_data, aes(x = Percent_Diff, fill = Type)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~ Region, scales = "free_y") +
+  labs(title = "Distribution of Price Differences from US Price",
+       subtitle = "Apple vs. Other Brands", x = "Percentage Difference from US Price",
+       y = "Density") +
+  scale_fill_manual(values = c("Apple" = "salmon", "Other Brands" = "turquoise")) +
+  theme_bw() +
+  xlim(-50, 50)
+```
+
+
+#### Top 10 brands by price stability (lowest CV) --> plotting barplot and checking the variability situation on the phone market for the top players
+```{r}
+stable_brands <- mobiles %>%
+  group_by(Company.Name) %>%
+  summarize(
+    Avg_CV = mean(Price_CV),
+    Model_Count = n()) %>%
+  filter(Model_Count >= 5) %>%
+  arrange(Avg_CV) %>%
+  head(10)
+
+ggplot(stable_brands, aes(x = reorder(Company.Name, -Avg_CV), y = Avg_CV)) +
+  geom_bar(stat = "identity", fill = ifelse(stable_brands$Company.Name == "Apple", "salmon", "turquoise")) +
+  coord_flip() +
+  labs(title = "Top 10 Brands with Most Stable Global Pricing",
+       subtitle = "Lower values indicate more consistent pricing across regions",
+       x = "Brand",
+       y = "Average Coefficient of Variation (%)") +
+  theme_bw()
+```
+
+> Conclusions: Apple devices actually have lower price variation across regions compared to most other brands. Looking at 1st and 5th plots, Apple shows a coefficient of variation around 11%, which is lower than brands like Motorola, Honor, Tecno, Samsung, Google, Sony, and Xiaomi. Only Realme shows more stable global pricing than Apple.
+According to the US comparison facet plot, Apple devices appear to have the highest markup in India, where they're priced approximately 10% higher than US prices. This contrasts with Pakistan where Apple devices are around 15% cheaper than US prices.
+***Realme*** stands out as having the most stable pricing across regions with the lowest coefficient of variation (around 6-7%), making it the most consistent global pricing strategy among all brands shown. Nokia also shows relatively stable pricing compared to many other brands. In contrast, brands like Motorola, Honor, and Tecno show much higher price variations across regions, with coefficients of variation ranging from 15-17%.
+
+## Q4. Do all smartphone brands have flagship and budget-friendly models, or do some brands only focus on premium devices?
+
+#### Market-position data perp (according to the hint) for upcomming visualizations:
+```{r}
+budget_threshold <- 300
+midrange_threshold <- 700
+
+market_position <- mobiles %>%
+  group_by(Company.Name) %>%
+  summarise(total_models = n(),
+            budget_models = sum(USA_USD < budget_threshold, na.rm = TRUE),
+            midrange_models = sum(USA_USD >= budget_threshold & USA_USD <= midrange_threshold, na.rm = TRUE),
+            premium_models = sum(USA_USD > midrange_threshold, na.rm = TRUE),
+            budget_percentage = budget_models / total_models * 100,
+            midrange_percentage = midrange_models / total_models * 100,
+            premium_percentage = premium_models / total_models * 100,
+            has_budget = budget_models > 0,
+            has_midrange = midrange_models > 0,
+            has_premium = premium_models > 0) %>%
+  filter(total_models >= 10) %>%
+  mutate(
+    segment_coverage = case_when(
+      has_budget & has_midrange & has_premium ~ "Full range",
+      !has_budget & has_midrange & has_premium ~ "Mid-range & Premium only",
+      has_budget & has_midrange & !has_premium ~ "Budget & Mid-range only",
+      has_budget & !has_midrange & has_premium ~ "Budget & Premium only",
+      !has_budget & !has_midrange & has_premium ~ "Premium only",
+      !has_budget & has_midrange & !has_premium ~ "Mid-range only",
+      has_budget & !has_midrange & !has_premium ~ "Budget only", TRUE ~ "?")) %>%
+  arrange(desc(premium_percentage))
+```
+
+#### Scatterplot with premium percentage vs total models
+```{r}
+ggplot(market_position, aes(x = premium_percentage, y = total_models, size = total_models, color = premium_percentage)) +
+  geom_point(alpha = 0.7) +
+  geom_text(aes(label = Company.Name), hjust = -0.2, vjust = 0.5, size = 3.5) +
+  scale_color_gradient(low = "brown", high = "gold") +
+  labs(title = "Smartphone Brand Positioning Map", subtitle = "Premium focus vs. Model variety", x = "Percentage of Premium Models (> $700)", y = "Total Number of Models", color = "Premium Focus (%)", size = "Model Count") +
+  theme_bw() +
+  theme(legend.position = "right",
+          plot.title = element_text(face = "bold"),
+          panel.grid.minor = element_blank()) +
+  xlim(0, 100) +
+  geom_vline(xintercept = 50, linetype = "dashed", alpha = 0.5) + # this is the threshold
+  annotate("text", x = 25, y = max(market_position$total_models) * 0.9, 
+           label = "Budget/Mid-range focused", color = "darkgrey", fontface = "italic", alpha = 0.7) +
+  annotate("text", x = 75, y = max(market_position$total_models) * 0.9, 
+           label = "Premium-focused", color = "gold", fontface = "italic", alpha = 0.7)
+```
+
+
+#### By Segment Distribution visualization
+##### Data Prep:
+```{r fig.width=15, fig.height=12}
+segment_dist <- mobiles %>%
+  filter(Company.Name %in% top_brands) %>%
+  mutate(price_segment = case_when(
+    USA_USD < budget_threshold ~ "Budget (< $300)",
+    USA_USD >= budget_threshold & USA_USD <= midrange_threshold ~ "Mid-range ($300-$700)",
+    USA_USD > midrange_threshold ~ "Premium (> $700)",
+    TRUE ~ "?")) %>%
+  group_by(Company.Name, price_segment) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(Company.Name) %>%
+  mutate(total = sum(count), percentage = count / total * 100) %>%
+  arrange(Company.Name, price_segment)
+
+segment_dist$price_segment <- factor(segment_dist$price_segment,
+  levels = c("Budget (< $300)", "Mid-range ($300-$700)", "Premium (> $700)")) # Making a correct ordering of price segments 
+```
+
+##### Faceted bar chart showing three-segment distribution for each top brand
+```{r fig.width=15, fig.height=7}
+ggplot(segment_dist, aes(x = price_segment, y = percentage, fill = price_segment)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~Company.Name, ncol = 3) +
+  scale_fill_manual(values = c("Budget (< $300)" = "turquoise", 
+                              "Mid-range ($300-$700)" = "palegreen", 
+                              "Premium (> $700)" = "salmon")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+         strip.text = element_text(face = "bold"),
+         plot.title = element_text(face = "bold"),
+         legend.position = "bottom") +
+  labs(title = "Price Segment Distribution by Top Smartphone Brands", 
+       x = "Price Segment", 
+       y = "Percentage of Models",
+       fill = "Price Segment")
+```
+
+> As you can notice, some brands like Apple are mostly focused on production of expensive/pricey phones, whereas other companies either try to produce all sorts of phones equally (number of models are equally distributed according to several price segments (Google)) or overproduce in 2 or more price segments disproportionately (Samsung). Apple deliberately separates itself from the rest of the companies to seem extra-premium, which is a part of their marketing strategy and brand positioning.
+
+#### Visualization of the premium vs budget split for top brands:
+
+##### Adding a premium_budget_split data to the environment:
+```{r}
+premium_budget_split <- mobiles %>%
+  filter(Company.Name %in% top_brands) %>%
+  mutate(price_segment = ifelse(USA_USD >= 650, "Premium (≥ $650)", "Budget (< $650)")) %>%
+  group_by(Company.Name, price_segment) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(Company.Name) %>%
+  mutate(percentage = count / sum(count) * 100)
+```
+
+##### Using Stacked bar chart showing premium vs budget split among the top brands
+```{r}
+ggplot(segment_dist, aes(x = reorder(Company.Name, -percentage), y = percentage, fill = price_segment)) +
+  geom_bar(stat = "identity", position = "stack", width = 0.7) +
+  geom_text(aes(label = sprintf("%.1f%%", percentage)), position = position_stack(vjust = 0.5), color = "black", fontface = "bold", size = 3) +
+  coord_flip() +
+  scale_fill_manual(values = c("Budget (< $300)" = "turquoise", 
+                             "Mid-range ($300-$700)" = "lightgreen", 
+                             "Premium (> $700)" = "salmon")) +
+  theme_bw() +
+  labs(title = "Price Segment Distribution by Smartphone Brand", subtitle = "Budget: < $300, Mid-range: $300-$700, Premium: > $700", x = "", y = "Percentage", fill = "Price Segment") +
+  theme(legend.position = "bottom",
+        panel.grid.major.y = element_blank(),
+        plot.title = element_text(face = "bold"),
+        axis.text.y = element_text(face = "bold"))
+```
+
+> Conclusions: Based on the graphs, not all smartphone brands have both flagship and budget-friendly models. Some brands have a clear focus on specific market segments:
+Apple stands out as almost exclusively focused on premium devices, with 91.8% of their models priced above $700 and only 8.2% in the mid-range category ($300-$700). They have no presence in the budget segment (under $300).
+On the opposite end, Realme focuses entirely on non-premium segments, with 62.3% of their lineup in the budget category (under $300) and 37.7% in the mid-range ($300-$700), but no premium devices above $700.
+Most other brands maintain a presence across all three price segments, but with different distributions:
+Huawei and Google lean heavily toward premium devices (64.3% and 42.9% premium models respectively)
+Samsung has a balanced approach with significant presence in both budget (31%) and premium (46.4%) segments
+Xiaomi, Oppo, Honor, Vivo, and OnePlus all maintain presence across all segments, with mid-range devices often being their largest category
+The smartphone brand positioning map (3rd plot) reinforces this, showing Apple as the most premium-focused brand (nearly 100% premium models), while brands like Infinix, POCO, Realme, and Lenovo are positioned firmly in the budget/mid-range space with little to no premium offerings.
+
+## Q5. Which region offers the most affordable smartphone prices on average? Are there any brands that price their phones significantly lower in one region compared to others?
+
+```{r}
+region_prices <- data.frame(
+  Region = c("Pakistan", "India", "China", "USA", "Dubai"),
+  Price_USD = c(
+    round(mean(mobiles$Pakistan_USD, na.rm = TRUE)),
+    round(mean(mobiles$India_USD, na.rm = TRUE)),
+    round(mean(mobiles$China_USD, na.rm = TRUE)),
+    round(mean(mobiles$USA_USD, na.rm = TRUE)),
+    round(mean(mobiles$Dubai_USD, na.rm = TRUE))))
+
+region_prices <- region_prices %>%
+  arrange(desc(Price_USD)) %>%
+  mutate(Region = factor(Region, levels = Region)) # Sorting regions by price
+```
+
+```{r}
+top_brands <- names(which(table(mobiles$Company.Name) >= 10)) 
+brand_region_price <- data.frame()
+
+for (brand in top_brands) {
+  brand_data <- mobiles[mobiles$Company.Name == brand, ]
+  brand_region_price <- rbind(brand_region_price, 
+    data.frame(
+      Company.Name = brand,
+      Region = "Pakistan", Price_USD = mean(brand_data$Pakistan_USD, na.rm = TRUE),
+      Region = "India", Price_USD = mean(brand_data$India_USD, na.rm = TRUE),
+      Region = "China", Price_USD = mean(brand_data$China_USD, na.rm = TRUE),
+      Region = "USA", Price_USD = mean(brand_data$USA_USD, na.rm = TRUE),
+      Region = "Dubai", Price_USD = mean(brand_data$Dubai_USD, na.rm = TRUE)))}
+
+brand_price_range <- data.frame()
+
+for (brand in top_brands) {
+  brand_prices <- c(
+    mean(mobiles$Pakistan_USD[mobiles$Company.Name == brand], na.rm = TRUE),
+    mean(mobiles$India_USD[mobiles$Company.Name == brand], na.rm = TRUE),
+    mean(mobiles$China_USD[mobiles$Company.Name == brand], na.rm = TRUE),
+    mean(mobiles$USA_USD[mobiles$Company.Name == brand], na.rm = TRUE),
+    mean(mobiles$Dubai_USD[mobiles$Company.Name == brand], na.rm = TRUE))
+  
+  regions <- c("Pakistan", "India", "China", "USA", "Dubai")
+  min_idx <- which.min(brand_prices)
+  max_idx <- which.max(brand_prices)
+  
+  brand_price_range <- rbind(brand_price_range, data.frame(
+        Company.Name = brand,
+        Min_Region = regions[min_idx],
+        Min_Price = brand_prices[min_idx],
+        Max_Region = regions[max_idx],
+        Max_Price = brand_prices[max_idx],
+        Price_Range_Pct = (brand_prices[max_idx] - brand_prices[min_idx]) / brand_prices[min_idx] * 100))}
+
+brand_price_range <- brand_price_range %>% 
+  arrange(desc(Price_Range_Pct)) # Sorting by price range percentage
+```
+
+##### heatmap data prep for top 10 brands
+```{r}
+top_10_brands <- names(sort(table(mobiles$Company.Name), decreasing = TRUE)[1:10])
+heatmap_data <- data.frame()
+
+for (brand in top_10_brands) {
+  brand_avg <- mean(c(
+    mean(mobiles$Pakistan_USD[mobiles$Company.Name == brand], na.rm = TRUE),
+    mean(mobiles$India_USD[mobiles$Company.Name == brand], na.rm = TRUE),
+    mean(mobiles$China_USD[mobiles$Company.Name == brand], na.rm = TRUE),
+    mean(mobiles$USA_USD[mobiles$Company.Name == brand], na.rm = TRUE),
+    mean(mobiles$Dubai_USD[mobiles$Company.Name == brand], na.rm = TRUE)), na.rm = TRUE)
+  
+  pak_diff <- (mean(mobiles$Pakistan_USD[mobiles$Company.Name == brand], na.rm = TRUE) - brand_avg) / brand_avg * 100
+  ind_diff <- (mean(mobiles$India_USD[mobiles$Company.Name == brand], na.rm = TRUE) - brand_avg) / brand_avg * 100
+  chn_diff <- (mean(mobiles$China_USD[mobiles$Company.Name == brand], na.rm = TRUE) - brand_avg) / brand_avg * 100
+  usa_diff <- (mean(mobiles$USA_USD[mobiles$Company.Name == brand], na.rm = TRUE) - brand_avg) / brand_avg * 100
+  dub_diff <- (mean(mobiles$Dubai_USD[mobiles$Company.Name == brand], na.rm = TRUE) - brand_avg) / brand_avg * 100
+  
+  heatmap_data <- rbind(heatmap_data,
+    data.frame(Company.Name = brand, Region = "Pakistan", Price_Difference_Pct = pak_diff),
+    data.frame(Company.Name = brand, Region = "India", Price_Difference_Pct = ind_diff),
+    data.frame(Company.Name = brand, Region = "China", Price_Difference_Pct = chn_diff),
+    data.frame(Company.Name = brand, Region = "USA", Price_Difference_Pct = usa_diff),
+    data.frame(Company.Name = brand, Region = "Dubai", Price_Difference_Pct = dub_diff)
+  )
+}
+```
+
+#### Average prices by region (using your code style)
+```{r}
+ggplot(region_prices, aes(x = Region, y = Price_USD, fill = Region)) +
+  geom_bar(stat = "identity", width = 0.8) +
+  geom_text(aes(label = sprintf("$%d", Price_USD)), vjust = -0.5, size = 4, fontface = "bold") +
+  labs(title = "Average Smartphone Price by Region", x = NULL, y = "Average Price (USD)") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+```
+
+
+#### Top 10 brands with biggest price differences
+
+```{r}
+ggplot(head(brand_price_range, 10), 
+       aes(x = reorder(Company.Name, Price_Range_Pct), y = Price_Range_Pct, fill = Price_Range_Pct)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = sprintf("%.0f%%", Price_Range_Pct)), hjust = -0.1) +
+  geom_text(aes(y = Price_Range_Pct/2, label = sprintf("%s vs %s", Max_Region, Min_Region)), 
+            hjust = 0.5, color = "white", size = 3) +
+  coord_flip() +
+  labs(title = "Brands with Largest Regional Price Differences", x = "", y = "Price Difference (%)") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+        legend.position = "none")
+```
+
+
+#### Heatmap of differences
+```{r}
+ggplot(heatmap_data, aes(x = Region, y = Company.Name, fill = Price_Difference_Pct)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.0f%%", Price_Difference_Pct)), size = 3) +
+  scale_fill_gradient2(low = "green", mid = "white", high = "red", midpoint = 0,
+                       limits = c(-40, 40), oob = scales::squish) +
+  labs(title = "Regional Price Variations", x = "", y = "") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+        panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+>"Q5 conclusions:
+ 
+- Most affordable region is Pakistan with Average: $450
+- Most expensive region is Dubai with Average: $586
+- Brand with largest regional price difference: Vivo (80% more expensive in USA vs. Pakistan)
+
+---
+
+# Part 2:
+
+#### 1. Plot a bar chart for average price per region in USD.
+
+```{r}
+ggplot(region_prices, aes(x = Region, y = Price_USD, fill = Region)) +
+  geom_bar(stat = "identity", width = 0.8) +
+  geom_text(aes(label = sprintf("$%d", Price_USD)), vjust = -0.5, size = 4, fontface = "bold") +
+  labs(title = "Average Smartphone Price by Region", x = NULL, y = "Average Price (USD)") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+```
+
+
+#### 2. Create a pie chart of the market share of smartphone brands.
+```{r}
+mobiles <- read.csv("mobiles_dataset.csv")
+mobiles$Pakistan_USD <- mobiles$Launched.Price.Pakistan.PKR * 0.0036
+mobiles$India_USD <- mobiles$Launched.Price.India.INR * 0.011
+mobiles$China_USD <- mobiles$Launched.Price.China.CNY * 0.14
+mobiles$Dubai_USD <- mobiles$Launched.Price.Dubai.AED * 0.27
+mobiles$USA_USD <- mobiles$Launched.Price.USA.USD
+mobiles$Price_Category <- cut(mobiles$USA_USD, breaks = c(0, 250, 450, 650, 800, 1100, 1500, 2000, 3000),
+                            labels = c("<$250", "$250-450", "$450-650", "$650-800", "$800-1100", "$1100-1500", "$1500-2000", "$2000+"))
+mobiles$RAM_GB <- as.numeric(regmatches(mobiles$RAM, regexpr("^\\d+", mobiles$RAM)))
+```
+
+
+```{r}
+brand_share <- mobiles %>%
+  dplyr::mutate(Total_USD = rowSums(select(., ends_with("_USD")), na.rm = TRUE)) %>%
+  dplyr::group_by(Company.Name) %>%
+  dplyr::summarize(Market_Value = sum(Total_USD, na.rm = TRUE)) %>%
+  dplyr::mutate(Percentage = Market_Value / sum(Market_Value) * 100) %>%
+  dplyr::arrange(desc(Market_Value)) %>%
+  rename(Brand = Company.Name)
+
+# Keeping top 10 brands and aggregating the rest into "Others" (because the color pallet has a limit + we need to visually simplify the pie chart for clarity)
+if(nrow(brand_share) > 10) {
+  top_brands <- head(brand_share, 10)
+  others <- data.frame(Brand = "Others",Market_Value = sum(brand_share$Market_Value) - sum(top_brands$Market_Value),
+                       Percentage = 100 - sum(top_brands$Percentage))
+  brand_share <- rbind(top_brands, others)}
+
+ggplot(brand_share, aes(x = "", y = Percentage, fill = Brand)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), 
+            position = position_stack(vjust = 0.5), size = 3, color = "black") +
+  labs(title = "Smartphone Brand Market Share by Total Value", fill = "Brand") +
+  theme_bw() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        panel.grid = element_blank(),
+        plot.title = element_text(size = 16, face = "bold", hjust = 0.5)) +
+  scale_fill_brewer(palette = "Paired")
+```
+
+
+---
+
+
+# Part 3: Recreate
+```{r fig.width=15, fig.height=7, warning=FALSE}
+company_order <- c("Apple", "Google", "Honor", "Huawei", "Infinix", "IQOO", "Lenovo", 
+                   "Motorola", "Nokia", "OnePlus", "Oppo", "Poco", "POCO", "Realme", 
+                   "Samsung", "Sony", "Tecno", "Vivo", "Xiaomi")
+
+plot_data <- mobiles %>%
+  dplyr::filter(!is.na(mobiles$USA_USD)) %>% # I get an error some-why if I don't mention "dplyr::"
+  dplyr::filter(Company.Name %in% company_order) %>%
+  dplyr::mutate(Company.Name = factor(Company.Name, levels = company_order))
+
+manual_colors <- c("Apple" = "#F07369",
+                    "Google" = "#F5795F",    
+                      "Honor" = "#E48800",     
+                        "Huawei" = "#BC9D01",
+                        "Infinix" = "#9CA600",
+                            "IQOO" = "#68A307",    
+                            "Lenovo" = "#02B913",
+                            "Motorola" = "#03BD62",
+                                "Nokia" = "#07BC8C",
+                                "OnePlus" = "#00C0B3",
+                                    "Oppo" = "#03BDD4",
+                                      "Poco" = "#05A6FF",
+                                        "POCO" = "#05A6FF",
+                                        "Realme" = "#7E97FF",     
+                                          "Samsung" = "#B37CF1",    
+                                              "Sony" = "#E36DF7",       
+                                                "Tecno" = "#F863E0",      
+                                                  "Vivo" = "#FE63BE",       
+                                                  "Xiaomi" = "#FF6A9A")
+
+ggplot(plot_data, aes(x = Company.Name, y = USA_USD, fill = Company.Name)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2, size = 0.8, color = "black", alpha = 0.7) +
+  labs(title = "Price Distribution by Company in USA",
+    subtitle = "A boxplot showing how the price varies by company, with individual data points overlaid", x = "Company", y = "Price in USD") +
+  scale_y_continuous(limits = c(100, 2700)) +
+  scale_fill_manual(values = manual_colors) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right",
+        legend.title = element_text(face = "bold"),
+        plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "italic", size = 9))
+```
+
+```{r fig.width=15, fig.height=7, warning=FALSE}
+ggplot(plot_data, aes(x = Battery.Capacity.mAh, y = USA_USD, color = Company.Name, size = Screen.Size.inches)) +
+  geom_point() +
+  labs(title = "Battery Capacity vs. Price in USA", subtitle = "The relationship between battery capacity, price, and screen size across different smartphone brands",
+        x = "Battery Capacity", y = "Price", color = "Brand") +
+  scale_x_continuous(limits = c(1500, 11000)) +
+  scale_y_continuous(limits = c(0, 2800)) +
+  scale_color_manual(values = manual_colors) +
+  guides(size = "none") +
+  theme_minimal() +
+  theme(legend.position = "right",
+        legend.title = element_text(face = "bold"),
+        plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "italic", size = 9))
+```
+
+```{r fig.width=15, fig.height=7, warning=FALSE}
+ggplot(plot_data, aes(x = Battery.Capacity.mAh, y = USA_USD, shape = Company.Name, color = Screen.Size.inches, size = Screen.Size.inches)) +
+  geom_point() +
+  labs(title = "Battery Capacity vs. Price for Top 5 Brands", subtitle = "Different Shapes for Each Brand, Color by Screen Size (USA)", 
+           x = "Battery Capacity (mAh)", y = "Price (USD)",   shape = "Brand", color = "Screen Size") +
+  scale_x_continuous(limits = c(2000, 10500)) +
+  scale_y_continuous(limits = c(100, 2000)) +
+  scale_shape_manual(values = c("Apple" = 16, "Honor" = 17, "Oppo" = 18, "Samsung" = 15, "Vivo" = 16)) +
+  scale_color_continuous() +
+  guides(size = "none", color = "none") +
+  theme_minimal() +
+  theme(legend.position = "right",
+        legend.title = element_text(face = "bold"),
+        plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "italic", size = 8))
+```
+
+
+---
+
+# Part 4: Using R, explain what else affects the prices of mobile phones. Summarize your findings:
+
+
+```{r}
+mobiles$Weight_g <- as.numeric(gsub("[^0-9]", "", mobiles$Mobile.Weight))
+mobiles$Weight_Cat <- ifelse(mobiles$Weight_g >= 210, "Heavy (≥210g)", 
+                      ifelse(mobiles$Weight_g < 170, "Light (<170g)", "Medium"))
+mobiles$Screen_Cat <- ifelse(mobiles$Screen.Size.inches >= 7, "Large (≥7\")", 
+                      ifelse(mobiles$Screen.Size.inches < 6, "Small (<6\")", "Medium"))
+# Defining a combined category for form factor
+mobiles$Form_Factor <- paste(mobiles$Weight_Cat, "/", mobiles$Screen_Cat)
+# avg price by form factor
+form_price <- aggregate(USA_USD ~ Form_Factor, 
+                        data = mobiles[!is.na(mobiles$Form_Factor) & !is.na(mobiles$USA_USD),], 
+                        FUN = function(x) c(mean = mean(x), count = length(x)))
+form_price <- data.frame(Form_Factor = form_price$Form_Factor, Average_Price = unlist(form_price$USA_USD[,1]), Count = unlist(form_price$USA_USD[,2]))
+form_price <- form_price[form_price$Count >= 10,]
+form_price <- form_price[order(-form_price$Average_Price),] # Sorting
+```
+
+```{r}
+ggplot(form_price, aes(x = reorder(Form_Factor, Average_Price), y = Average_Price)) +
+  geom_bar(stat = "identity", fill = "coral", width = 0.7) + 
+  # Place all labels consistently at the end of each bar
+  geom_text(aes(label = sprintf("$%d", round(Average_Price))), hjust = -0.1, size = 5) +
+  coord_flip() +
+  # Extend the x-axis to make room for labels
+  scale_y_continuous(limits = c(0, max(form_price$Average_Price) * 1.2)) +
+  labs(title = "Form Factor Impact on Smartphone Prices", x = "", y = "Average Price (USD)") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14))
+```
